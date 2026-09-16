@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Release Board — Upcoming Game Releases</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #12141a;
+    --panel: #1b1f27;
+    --panel-alt: #20242d;
+    --border: #2c313c;
+    --text: #ece4d2;
+    --text-dim: #8b8f99;
+    --amber: #f5a623;
+    --teal: #4fbdba;
+    --purple: #8e7cc3;
+    --red: #e5533d;
+    --blue: #6fa8db;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ---------- header ---------- */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 22px 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .brand .title {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: 0.5px;
+    color: var(--amber);
+  }
+
+  .brand .sub {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .clock {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-dim);
+    text-align: right;
+  }
+
+  .clock .time {
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  .account-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  button {
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--panel-alt);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  button:hover { border-color: var(--amber); }
+  button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  button.primary {
+    background: var(--amber);
+    color: #1a1200;
+    border-color: var(--amber);
+  }
+  button.primary:hover { background: #ffb84a; }
+
+  button.ghost {
+    background: transparent;
+  }
+
+  .signed-in-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--teal);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 4px;
+  }
+
+  /* ---------- layout ---------- */
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 24px 28px 80px;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .reminders-panel {
+    padding: 18px 20px;
+    margin-bottom: 24px;
+  }
+
+  .reminders-panel h2 {
+    margin: 0 0 4px;
+    font-size: 15px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--amber);
+  }
+
+  .reminders-panel p.desc {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .reminders-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  select {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--panel-alt);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+
+  .reminder-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .reminder-list li {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    padding: 6px 10px;
+    background: var(--panel-alt);
+    border-radius: 4px;
+    border-left: 2px solid var(--teal);
+  }
+
+  .reminder-list .countdown { color: var(--amber); font-family: 'JetBrains Mono', monospace; }
+
+  .empty-note {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
+  /* ---------- genre tabs ---------- */
+  .tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+
+  .tab {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 7px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+
+  .tab.active {
+    color: var(--bg);
+    background: var(--amber);
+    border-color: var(--amber);
+    font-weight: 700;
+  }
+
+  .tab .dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+
+  /* ---------- board: horizontal scroller of square cards ---------- */
+  .scroller-wrap {
+    position: relative;
+  }
+
+  .scroller {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding: 4px 4px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .scroller::-webkit-scrollbar { height: 6px; }
+  .scroller::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .scroller::-webkit-scrollbar-track { background: transparent; }
+
+  .card {
+    flex: 0 0 168px;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    outline: none;
+  }
+
+  .card:focus-visible .card-art { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  .card-art {
+    width: 168px;
+    height: 168px;
+    border-radius: 8px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .card-art .initials {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: 42px;
+    color: rgba(18, 20, 26, 0.55);
+    letter-spacing: 1px;
+  }
+
+  .card-art .status-pill {
+    position: absolute;
+    left: 8px;
+    bottom: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 7px;
+    border-radius: 3px;
+    background: rgba(18, 20, 26, 0.55);
+    color: #fff;
+  }
+
+  .card-art .status-pill.soon { background: var(--red); }
+
+  .card .bookmark-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    background: rgba(18, 20, 26, 0.55);
+    border: none;
+    color: #fff;
+  }
+
+  .card .bookmark-btn.active { color: var(--amber); }
+
+  .card-title {
+    margin-top: 9px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .card-date {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 3px;
+  }
+
+  .scroll-btn {
+    position: absolute;
+    top: 76px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--panel-alt);
+    z-index: 2;
+    padding: 0;
+  }
+  .scroll-btn.left { left: -4px; }
+  .scroll-btn.right { right: -4px; }
+
+  .keyhint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin: 4px 2px 16px;
+  }
+  .keyhint kbd {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  @media (max-width: 640px) {
+    .scroll-btn { display: none; }
+  }
+
+  /* ---------- modal ---------- */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+  }
+  .modal-backdrop.open { display: flex; }
+
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    width: 100%;
+    max-width: 340px;
+  }
+
+  .modal h3 {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--amber);
+    font-size: 16px;
+  }
+
+  .modal p {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin: 0 0 14px;
+  }
+
+  .modal input {
+    width: 100%;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 14px;
+    margin-bottom: 14px;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .modal-error {
+    background: rgba(229, 83, 61, 0.12);
+    border: 1px solid var(--red);
+    color: var(--red);
+    font-size: 12px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+  }
+
+  footer {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 28px 40px;
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="title">RELEASE BOARD</div>
+    <div class="sub">Upcoming game releases, sorted by genre</div>
+  </div>
+  <div class="account-area" id="accountArea"></div>
+</header>
+
+<main>
+  <div class="panel reminders-panel">
+    <h2>Reminders</h2>
+    <p class="desc" id="remindersDesc">Sign in to bookmark games and get reminded before they launch.</p>
+    <div id="remindersBody"></div>
+  </div>
+
+  <div class="tabs" id="genreTabs"></div>
+  <p class="keyhint"><kbd>←</kbd> <kbd>→</kbd> to scroll through games</p>
+  <div class="scroller-wrap">
+    <button class="scroll-btn left" id="scrollLeftBtn" aria-label="Scroll left">‹</button>
+    <div id="board" class="scroller"></div>
+    <button class="scroll-btn right" id="scrollRightBtn" aria-label="Scroll right">›</button>
+  </div>
+</main>
+
+<footer>
+  Release dates are sourced from public gaming-press coverage and may shift — check the publisher's page before making plans.
+  Reminder emails are sent by the Release Board backend once a bookmarked game's release date falls inside your chosen lead time.
+</footer>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <h3 id="modalTitle">Sign in</h3>
+    <p id="modalDesc">Sign in to bookmark games and get emailed before they launch.</p>
+    <div id="modalError" class="modal-error" hidden></div>
+    <input type="text" id="nameInput" placeholder="Display name" maxlength="24" hidden>
+    <input type="email" id="emailInput" placeholder="Email" autocomplete="email">
+    <input type="password" id="passwordInput" placeholder="Password" autocomplete="current-password">
+    <div class="modal-actions">
+      <button class="ghost" id="toggleModeBtn">Need an account?</button>
+      <div style="display:flex; gap:8px;">
+        <button class="ghost" id="cancelModal">Cancel</button>
+        <button class="primary" id="confirmModal">Sign in</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+// ---------------------------------------------------------------
+// Firebase (client SDK, loaded directly from Firebase's CDN — no
+// bundler needed). Accounts run on Firebase Authentication and data
+// lives in Firestore; both are free on the Spark plan and are called
+// directly from the browser, so there's no backend to deploy.
+// ---------------------------------------------------------------
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  updateProfile
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  query,
+  where,
+  getDocs
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+// Fill this in with your own project's config — Firebase console →
+// Project settings → General → Your apps → Web app → SDK setup and
+// configuration. This object isn't a secret; it's meant to be public.
+// Firestore Security Rules (firestore.rules) are what actually protect
+// the data, not hiding these values.
+const firebaseConfig = {
+  apiKey: "AIzaSyB9uIgL8nut2-DjFGgwk2iR3BfXZYAHydo",
+  authDomain: "game-release-board.firebaseapp.com",
+  projectId: "game-release-board",
+  storageBucket: "game-release-board.firebasestorage.app",
+  messagingSenderId: "32591214634",
+  appId: "1:32591214634:web:5e243193ea7228217d6b53",
+  measurementId: "G-HLDXQC5TB0"
+};
+
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+
+// ---------------------------------------------------------------
+// Game catalog (curated upcoming releases, as of Sept 2026). Keep this
+// in sync with the copy in reminder-script/index.js — the GitHub
+// Actions job reads its own copy since it runs outside the browser.
+// ---------------------------------------------------------------
+const GAMES = [
+  {
+    id: 'fire-emblem-fortunes-weave',
+    name: "Fire Emblem: Fortune's Weave",
+    date: '2026-09-17',
+    dateLabel: null,
+    platform: 'Switch 2',
+    genre: 'Strategy',
+    blurb: 'Turn-based tactical battles return with a new continent to unite.'
+  },
+  {
+    id: 'control-resonant',
+    name: 'Control Resonant',
+    date: '2026-09-24',
+    dateLabel: null,
+    platform: 'PC, PS5, Xbox Series X',
+    genre: 'Action-Adventure',
+    blurb: "Remedy's paranatural sequel puts Dylan Faden front and center, this time out in the streets of New York."
+  },
+  {
+    id: 'witcher-3-remastered',
+    name: 'The Witcher 3: Wild Hunt — Remastered',
+    date: '2026-09-29',
+    dateLabel: null,
+    platform: 'PC, PS5, Xbox Series X',
+    genre: 'RPG',
+    blurb: 'A free visual overhaul for existing owners, bundling in the Hearts of Stone and Blood and Wine expansions.'
+  },
+  {
+    id: 'modern-warfare-new',
+    name: 'Call of Duty: Modern Warfare (2026)',
+    date: null,
+    dateLabel: 'October 2026',
+    platform: 'PC, PS5, Xbox Series X',
+    genre: 'Shooter',
+    blurb: "The annual series continues with another entry in the Modern Warfare sub-series."
+  },
+  {
+    id: 'gears-new',
+    name: 'Gears (new entry)',
+    date: null,
+    dateLabel: 'November 2026',
+    platform: 'Xbox Series X, PC',
+    genre: 'Shooter',
+    blurb: 'The cover-based shooter franchise returns for a new chapter.'
+  },
+  {
+    id: 'gta-vi',
+    name: 'Grand Theft Auto VI',
+    date: '2026-11-19',
+    dateLabel: null,
+    platform: 'PS5, Xbox Series X|S',
+    genre: 'Action-Adventure',
+    blurb: 'Rockstar returns to Vice City with two protagonists, Jason and Lucia.'
+  },
+  {
+    id: 'silent-hill-townfall',
+    name: 'Silent Hill: Townfall',
+    date: null,
+    dateLabel: 'Fall 2026 (date TBA)',
+    platform: 'PS5, PC',
+    genre: 'Horror',
+    blurb: 'A first-person descent into a fog-choked Scottish island town.'
+  },
+  {
+    id: 'marvels-wolverine',
+    name: "Marvel's Wolverine",
+    date: null,
+    dateLabel: 'Late 2026 (date TBA)',
+    platform: 'PS5',
+    genre: 'Action-Adventure',
+    blurb: "Insomniac's follow-up to their Spider-Man games, with a darker, more brutal edge."
+  },
+  {
+    id: 'blood-of-dawnwalker',
+    name: 'The Blood of Dawnwalker',
+    date: null,
+    dateLabel: '2026 (date TBA)',
+    platform: 'PC, PS5, Xbox Series X',
+    genre: 'RPG',
+    blurb: 'A dark-fantasy RPG from former Witcher developers, set in the Carpathian kingdom of Vale Sangora.'
+  }
+];
+
+const GENRE_COLORS = {
+  'Action-Adventure': '#f5a623',
+  'RPG': '#4fbdba',
+  'Strategy': '#8e7cc3',
+  'Horror': '#e5533d',
+  'Shooter': '#6fa8db'
+};
+
+const GENRES = ['All', ...Array.from(new Set(GAMES.map(g => g.genre)))];
+
+let activeGenre = 'All';
+let currentUser = null;         // Firebase Auth User object, or null
+let userProfile = null;         // { reminderDays } from Firestore, once signed in
+let bookmarkIds = [];
+let authMode = 'login';         // 'login' | 'register', controls the modal
+
+// ---------------------------------------------------------------
+// Firestore helpers
+// ---------------------------------------------------------------
+function bookmarkDocId(uid, gameId) {
+  return `${uid}_${gameId}`;
+}
+
+async function loadUserState(user) {
+  currentUser = user;
+  const profileSnap = await getDoc(doc(db, 'users', user.uid));
+  userProfile = profileSnap.exists() ? profileSnap.data() : { reminderDays: 3 };
+
+  const bmSnap = await getDocs(query(collection(db, 'bookmarks'), where('uid', '==', user.uid)));
+  bookmarkIds = bmSnap.docs.map(d => d.data().gameId);
+}
+
+function clearUserState() {
+  currentUser = null;
+  userProfile = null;
+  bookmarkIds = [];
+}
+
+async function registerAccount(email, password, displayName) {
+  const cred = await createUserWithEmailAndPassword(auth, email, password);
+  await updateProfile(cred.user, { displayName });
+  await setDoc(doc(db, 'users', cred.user.uid), {
+    reminderDays: 3,
+    createdAt: new Date().toISOString()
+  });
+  await loadUserState(cred.user);
+}
+
+async function loginAccount(email, password) {
+  const cred = await signInWithEmailAndPassword(auth, email, password);
+  await loadUserState(cred.user);
+}
+
+async function logoutAccount() {
+  await signOut(auth);
+  clearUserState();
+}
+
+async function setReminderDays(days) {
+  const prev = userProfile.reminderDays;
+  userProfile.reminderDays = days; // optimistic
+  try {
+    await updateDoc(doc(db, 'users', currentUser.uid), { reminderDays: days });
+  } catch (e) {
+    userProfile.reminderDays = prev;
+    renderReminders();
+  }
+}
+
+function friendlyAuthError(err) {
+  const code = err && err.code;
+  const map = {
+    'auth/email-already-in-use': 'An account with that email already exists.',
+    'auth/invalid-email': 'Enter a valid email address.',
+    'auth/weak-password': 'Password must be at least 6 characters.',
+    'auth/wrong-password': 'Incorrect email or password.',
+    'auth/user-not-found': 'Incorrect email or password.',
+    'auth/invalid-credential': 'Incorrect email or password.',
+    'auth/too-many-requests': 'Too many attempts — please wait a moment and try again.'
+  };
+  return map[code] || (err && err.message) || 'Something went wrong. Please try again.';
+}
+
+// ---------------------------------------------------------------
+// Date helpers
+// ---------------------------------------------------------------
+function daysUntil(dateStr) {
+  const now = new Date();
+  const target = new Date(dateStr + 'T00:00:00');
+  const diffMs = target - new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round(diffMs / 86400000);
+}
+
+function formatCardDate(game) {
+  if (!game.date) return game.dateLabel;
+  const d = new Date(game.date + 'T00:00:00');
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function initialsFor(name) {
+  const words = name.replace(/[^A-Za-z0-9 ]/g, '').split(' ').filter(Boolean);
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+function statusFor(game) {
+  if (!game.date) return { text: game.dateLabel, cls: 'tba' };
+  const n = daysUntil(game.date);
+  if (n < 0) return { text: 'Released', cls: 'normal' };
+  if (n === 0) return { text: 'Out today', cls: 'soon' };
+  if (n <= 14) return { text: `T-minus ${n}d`, cls: 'soon' };
+  return { text: `T-minus ${n}d`, cls: 'normal' };
+}
+
+// ---------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------
+function renderClock() {
+  const el = document.getElementById('clockTime');
+  if (!el) return;
+  const now = new Date();
+  el.textContent = now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function renderAccountArea() {
+  const area = document.getElementById('accountArea');
+  area.innerHTML = '';
+
+  const clockWrap = document.createElement('div');
+  clockWrap.className = 'clock';
+  clockWrap.innerHTML = `<span class="time mono" id="clockTime"></span><br>today`;
+  area.appendChild(clockWrap);
+
+  if (currentUser) {
+    const chip = document.createElement('span');
+    chip.className = 'signed-in-chip';
+    chip.textContent = `@ ${currentUser.displayName || currentUser.email}`;
+    area.appendChild(chip);
+
+    const btn = document.createElement('button');
+    btn.className = 'ghost';
+    btn.textContent = 'Sign out';
+    btn.onclick = async () => { await logoutAccount(); renderAll(); };
+    area.appendChild(btn);
+  } else {
+    const btn = document.createElement('button');
+    btn.className = 'primary';
+    btn.textContent = 'Sign in';
+    btn.onclick = () => openModal('login');
+    area.appendChild(btn);
+  }
+  renderClock();
+}
+
+function renderTabs() {
+  const tabs = document.getElementById('genreTabs');
+  tabs.innerHTML = '';
+  GENRES.forEach(genre => {
+    const tab = document.createElement('div');
+    tab.className = 'tab' + (activeGenre === genre ? ' active' : '');
+    if (genre !== 'All') {
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = GENRE_COLORS[genre];
+      tab.appendChild(dot);
+    }
+    tab.appendChild(document.createTextNode(genre));
+    tab.onclick = () => { activeGenre = genre; renderBoard(); };
+    tabs.appendChild(tab);
+  });
+}
+
+function isBookmarked(id) {
+  return bookmarkIds.includes(id);
+}
+
+async function toggleBookmark(id) {
+  if (!currentUser) { openModal('login'); return; }
+
+  const wasBookmarked = bookmarkIds.includes(id);
+  // Optimistic update so the star responds immediately.
+  bookmarkIds = wasBookmarked ? bookmarkIds.filter(g => g !== id) : [...bookmarkIds, id];
+  renderReminders();
+  renderBoard();
+
+  try {
+    const ref = doc(db, 'bookmarks', bookmarkDocId(currentUser.uid, id));
+    if (wasBookmarked) {
+      await deleteDoc(ref);
+    } else {
+      await setDoc(ref, {
+        uid: currentUser.uid,
+        gameId: id,
+        notified: false,
+        createdAt: new Date().toISOString()
+      });
+    }
+  } catch (e) {
+    // Roll back on failure.
+    bookmarkIds = wasBookmarked ? [...bookmarkIds, id] : bookmarkIds.filter(g => g !== id);
+    renderReminders();
+    renderBoard();
+  }
+}
+
+const CARD_STEP = 184; // card width (168) + gap (16)
+
+function renderBoard() {
+  renderTabs();
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+
+  const games = GAMES
+    .filter(g => activeGenre === 'All' || g.genre === activeGenre)
+    .sort((a, b) => {
+      if (a.date && b.date) return new Date(a.date) - new Date(b.date);
+      if (a.date) return -1;
+      if (b.date) return 1;
+      return 0;
+    });
+
+  games.forEach((game, i) => {
+    const status = statusFor(game);
+    const c1 = GENRE_COLORS[game.genre];
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.tabIndex = 0;
+    card.dataset.index = i;
+
+    card.innerHTML = `
+      <div class="card-art" style="background:${c1}">
+        <span class="initials">${initialsFor(game.name)}</span>
+        <span class="status-pill ${status.cls === 'soon' ? 'soon' : ''}">${status.text}</span>
+      </div>
+      <div class="card-title">${game.name}</div>
+      <div class="card-date mono">${formatCardDate(game)}</div>
+    `;
+
+    const bookmarkBtn = document.createElement('button');
+    bookmarkBtn.className = 'bookmark-btn' + (isBookmarked(game.id) ? ' active' : '');
+    bookmarkBtn.title = isBookmarked(game.id) ? 'Remove bookmark' : 'Bookmark this game';
+    bookmarkBtn.textContent = isBookmarked(game.id) ? '★' : '☆';
+    bookmarkBtn.onclick = (e) => { e.stopPropagation(); toggleBookmark(game.id); };
+    card.querySelector('.card-art').appendChild(bookmarkBtn);
+
+    board.appendChild(card);
+  });
+}
+
+function scrollBoard(direction) {
+  const board = document.getElementById('board');
+  board.scrollBy({ left: direction * CARD_STEP * 2, behavior: 'smooth' });
+}
+
+function renderReminders() {
+  const desc = document.getElementById('remindersDesc');
+  const body = document.getElementById('remindersBody');
+  body.innerHTML = '';
+
+  if (!currentUser) {
+    desc.textContent = 'Sign in to bookmark games and get emailed before they launch.';
+    return;
+  }
+
+  const bookmarked = GAMES.filter(g => bookmarkIds.includes(g.id));
+  desc.textContent = bookmarked.length
+    ? `Signed in as ${currentUser.displayName || currentUser.email}. You'll get an email at ${currentUser.email} when a bookmarked game is close to release.`
+    : `Signed in as ${currentUser.displayName || currentUser.email}. Bookmark a game below (☆) to start tracking it.`;
+
+  const controls = document.createElement('div');
+  controls.className = 'reminders-controls';
+
+  const label = document.createElement('span');
+  label.className = 'mono';
+  label.style.fontSize = '13px';
+  label.style.color = 'var(--text-dim)';
+  label.textContent = 'Email me:';
+  controls.appendChild(label);
+
+  const select = document.createElement('select');
+  [1, 3, 7, 14].forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = n;
+    opt.textContent = `${n} day${n > 1 ? 's' : ''} before release`;
+    if (userProfile.reminderDays === n) opt.selected = true;
+    select.appendChild(opt);
+  });
+  select.onchange = () => setReminderDays(parseInt(select.value, 10));
+  controls.appendChild(select);
+
+  body.appendChild(controls);
+
+  if (bookmarked.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-note';
+    empty.textContent = 'No bookmarks yet.';
+    body.appendChild(empty);
+    return;
+  }
+
+  const list = document.createElement('ul');
+  list.className = 'reminder-list';
+  bookmarked
+    .slice()
+    .sort((a, b) => {
+      if (a.date && b.date) return new Date(a.date) - new Date(b.date);
+      if (a.date) return -1;
+      if (b.date) return 1;
+      return 0;
+    })
+    .forEach(g => {
+      const li = document.createElement('li');
+      const status = statusFor(g);
+      li.innerHTML = `<span>${g.name}</span><span class="countdown mono">${status.text}</span>`;
+      list.appendChild(li);
+    });
+  body.appendChild(list);
+}
+
+function renderAll() {
+  renderAccountArea();
+  renderReminders();
+  renderBoard();
+}
+
+// ---------------------------------------------------------------
+// Modal (sign in / create account)
+// ---------------------------------------------------------------
+function setModalMode(mode) {
+  authMode = mode;
+  const isRegister = mode === 'register';
+  document.getElementById('modalTitle').textContent = isRegister ? 'Create account' : 'Sign in';
+  document.getElementById('modalDesc').textContent = isRegister
+    ? 'Create an account to bookmark games and get emailed before they launch.'
+    : 'Sign in to bookmark games and get emailed before they launch.';
+  document.getElementById('nameInput').hidden = !isRegister;
+  document.getElementById('confirmModal').textContent = isRegister ? 'Create account' : 'Sign in';
+  document.getElementById('toggleModeBtn').textContent = isRegister ? 'Have an account?' : 'Need an account?';
+  document.getElementById('modalError').hidden = true;
+}
+
+function openModal(mode) {
+  setModalMode(mode || 'login');
+  document.getElementById('modalBackdrop').classList.add('open');
+  document.getElementById('emailInput').value = '';
+  document.getElementById('passwordInput').value = '';
+  document.getElementById('nameInput').value = '';
+  document.getElementById('emailInput').focus();
+}
+function closeModal() {
+  document.getElementById('modalBackdrop').classList.remove('open');
+}
+function showModalError(message) {
+  const el = document.getElementById('modalError');
+  el.textContent = message;
+  el.hidden = false;
+}
+
+document.getElementById('cancelModal').onclick = closeModal;
+document.getElementById('modalBackdrop').onclick = (e) => {
+  if (e.target.id === 'modalBackdrop') closeModal();
+};
+document.getElementById('toggleModeBtn').onclick = () => {
+  setModalMode(authMode === 'login' ? 'register' : 'login');
+};
+document.getElementById('confirmModal').onclick = async () => {
+  const email = document.getElementById('emailInput').value.trim();
+  const password = document.getElementById('passwordInput').value;
+  const displayName = document.getElementById('nameInput').value.trim();
+
+  const btn = document.getElementById('confirmModal');
+  btn.disabled = true;
+  document.getElementById('modalError').hidden = true;
+
+  try {
+    if (authMode === 'register') {
+      if (!displayName) throw { message: 'Enter a display name.' };
+      await registerAccount(email, password, displayName);
+    } else {
+      await loginAccount(email, password);
+    }
+    closeModal();
+    renderAll();
+  } catch (e) {
+    showModalError(friendlyAuthError(e));
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+// ---------------------------------------------------------------
+// Keyboard + button navigation
+// ---------------------------------------------------------------
+document.getElementById('scrollLeftBtn').onclick = () => scrollBoard(-1);
+document.getElementById('scrollRightBtn').onclick = () => scrollBoard(1);
+
+document.addEventListener('keydown', (e) => {
+  const modalOpen = document.getElementById('modalBackdrop').classList.contains('open');
+  const typing = document.activeElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName);
+  if (modalOpen || typing) return;
+
+  if (e.key === 'ArrowRight') { e.preventDefault(); scrollBoard(1); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); scrollBoard(-1); }
+});
+
+// ---------------------------------------------------------------
+// Init — Firebase Auth persists sessions itself (no manual "restore
+// session" step needed); onAuthStateChanged fires once on load with
+// whoever was already signed in, then again on every sign-in/out.
+// ---------------------------------------------------------------
+renderAll();
+setInterval(renderClock, 1000);
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    await loadUserState(user);
+  } else {
+    clearUserState();
+  }
+  renderAll();
+});
+</script>
+
+</body>
+</html>

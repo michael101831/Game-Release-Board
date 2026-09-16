@@ -1,0 +1,21 @@
+name: Deploy preview on pull request
+
+on: pull_request
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    # Skip PRs from forks — they can't see repo secrets, so the deploy
+    # step would just fail. Remove this `if` if every PR always comes
+    # from a branch in this same repo.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          projectId: your-firebase-project-id
+          # No channelId → deploys to a temporary preview URL and comments
+          # it on the PR, instead of touching the live site.

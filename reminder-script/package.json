@@ -1,0 +1,12 @@
+{
+  "name": "release-board-reminder-script",
+  "description": "Runs on a GitHub Actions schedule to email bookmarked-game reminders, reading Firestore directly via a service account.",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.5.0",
+    "nodemailer": "^6.9.14"
+  }
+}

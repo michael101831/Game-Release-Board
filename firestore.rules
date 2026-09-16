@@ -1,0 +1,34 @@
+rules_version = '2';
+
+// Unlike the Cloud Functions version, the browser talks to Firestore
+// directly here (via the Firebase Auth-authenticated client SDK) —
+// so these rules are the only thing standing between a signed-in user
+// and someone else's data. Every rule below checks the request's
+// Firebase Auth uid against the document it's touching.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // One doc per user, holding just their reminder lead time.
+    // A user can read/create/update only their own doc, keyed by uid.
+    match /users/{uid} {
+      allow read, create, update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    // One doc per (user, game) bookmark, id = "<uid>_<gameId>".
+    match /bookmarks/{bookmarkId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.uid
+                    && request.resource.data.notified == false
+                    && bookmarkId == request.auth.uid + '_' + request.resource.data.gameId;
+
+      allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
+
+      // Only the reminder script (using an admin service account, which
+      // bypasses these rules entirely) should ever flip `notified`.
+      allow update: if false;
+    }
+  }
+}

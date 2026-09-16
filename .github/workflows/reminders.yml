@@ -1,0 +1,33 @@
+name: Send release reminders
+
+on:
+  schedule:
+    # 13:00 UTC daily. GitHub may delay scheduled runs by a few minutes
+    # under load — fine for a once-a-day reminder check.
+    - cron: '0 13 * * *'
+  workflow_dispatch: {} # lets you trigger a run by hand from the Actions tab
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: reminder-script
+        run: npm install
+
+      - name: Run reminder check
+        working-directory: reminder-script
+        run: node index.js
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
