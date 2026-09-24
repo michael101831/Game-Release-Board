@@ -277,6 +277,14 @@
     letter-spacing: 1px;
   }
 
+  .card-art img.cover {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
   .card-art .status-pill {
     position: absolute;
     left: 8px;
@@ -288,9 +296,144 @@
     border-radius: 3px;
     background: rgba(18, 20, 26, 0.55);
     color: #fff;
+    z-index: 1;
   }
 
   .card-art .status-pill.soon { background: var(--red); }
+
+  /* ---------- multi-game date card (shared release date) ---------- */
+  .card-multi {
+    width: 168px;
+    height: 168px;
+    border-radius: 8px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .card-multi:hover, .card-multi:focus-visible {
+    border-color: var(--amber);
+    outline: none;
+  }
+
+  .multi-date-header {
+    font-size: 11px;
+    color: var(--amber);
+    padding: 8px 10px 6px;
+    border-bottom: 1px solid var(--border);
+    flex: 0 0 auto;
+  }
+
+  .multi-rows {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .multi-row {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--border);
+    min-height: 0;
+    overflow: hidden;
+  }
+  .multi-row:last-child { border-bottom: none; }
+
+  .multi-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: 3px;
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: var(--panel);
+  }
+
+  .multi-title {
+    font-size: 11.5px;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .multi-row.more-row {
+    justify-content: center;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+
+  /* ---------- date popup modal ---------- */
+  .date-modal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 50vh;
+    overflow-y: auto;
+    margin-bottom: 14px;
+  }
+
+  .date-modal-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px;
+    border-radius: 6px;
+    background: var(--panel-alt);
+  }
+
+  .date-modal-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 5px;
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: var(--panel);
+  }
+
+  .date-modal-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .date-modal-info .name {
+    font-size: 13px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .date-modal-info .platform {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .date-modal-row .bookmark-btn {
+    position: static;
+    width: 30px;
+    height: 30px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text-dim);
+    flex: 0 0 auto;
+  }
+  .date-modal-row .bookmark-btn.active { color: var(--amber); border-color: var(--amber); }
+
+  .rawg-attribution {
+    margin-top: 4px;
+  }
+  .rawg-attribution a { color: var(--text-dim); }
 
   .card .bookmark-btn {
     position: absolute;
@@ -459,8 +602,8 @@
 </main>
 
 <footer>
-  Release dates are sourced from public gaming-press coverage and may shift — check the publisher's page before making plans.
   Reminder emails are sent by the Release Board backend once a bookmarked game's release date falls inside your chosen lead time.
+  <div class="rawg-attribution">Game data and cover art provided by <a href="https://rawg.io" target="_blank" rel="noopener">RAWG.io</a>.</div>
 </footer>
 
 <div class="modal-backdrop" id="modalBackdrop">
@@ -477,6 +620,16 @@
         <button class="ghost" id="cancelModal">Cancel</button>
         <button class="primary" id="confirmModal">Sign in</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="dateModalBackdrop">
+  <div class="modal">
+    <h3 id="dateModalTitle">Releasing —</h3>
+    <div id="dateModalList" class="date-modal-list"></div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button class="ghost" id="dateModalClose">Close</button>
     </div>
   </div>
 </div>
@@ -531,109 +684,61 @@ const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
 // ---------------------------------------------------------------
-// Game catalog (curated upcoming releases, as of Sept 2026). Keep this
-// in sync with the copy in reminder-script/index.js — the GitHub
-// Actions job reads its own copy since it runs outside the browser.
+// Game catalog — fetched live from RAWG (rawg.io), a public game
+// database, instead of a hand-maintained list. Sign up for a free key
+// at https://rawg.io/apidocs and paste it below. This key is visible
+// in the page's source once deployed — that's expected for RAWG's
+// free-tier keys (rate-limited per key, not a sensitive credential),
+// not a mistake.
+//
+// Attribution note: RAWG's terms require crediting them wherever
+// their data/images are shown — see the footer.
 // ---------------------------------------------------------------
-const GAMES = [
-  {
-    id: 'fire-emblem-fortunes-weave',
-    name: "Fire Emblem: Fortune's Weave",
-    date: '2026-09-17',
-    dateLabel: null,
-    platform: 'Switch 2',
-    genre: 'Strategy',
-    blurb: 'Turn-based tactical battles return with a new continent to unite.'
-  },
-  {
-    id: 'control-resonant',
-    name: 'Control Resonant',
-    date: '2026-09-24',
-    dateLabel: null,
-    platform: 'PC, PS5, Xbox Series X',
-    genre: 'Action-Adventure',
-    blurb: "Remedy's paranatural sequel puts Dylan Faden front and center, this time out in the streets of New York."
-  },
-  {
-    id: 'witcher-3-remastered',
-    name: 'The Witcher 3: Wild Hunt — Remastered',
-    date: '2026-09-29',
-    dateLabel: null,
-    platform: 'PC, PS5, Xbox Series X',
-    genre: 'RPG',
-    blurb: 'A free visual overhaul for existing owners, bundling in the Hearts of Stone and Blood and Wine expansions.'
-  },
-  {
-    id: 'modern-warfare-new',
-    name: 'Call of Duty: Modern Warfare (2026)',
-    date: null,
-    dateLabel: 'October 2026',
-    platform: 'PC, PS5, Xbox Series X',
-    genre: 'Shooter',
-    blurb: "The annual series continues with another entry in the Modern Warfare sub-series."
-  },
-  {
-    id: 'gears-new',
-    name: 'Gears (new entry)',
-    date: null,
-    dateLabel: 'November 2026',
-    platform: 'Xbox Series X, PC',
-    genre: 'Shooter',
-    blurb: 'The cover-based shooter franchise returns for a new chapter.'
-  },
-  {
-    id: 'gta-vi',
-    name: 'Grand Theft Auto VI',
-    date: '2026-11-19',
-    dateLabel: null,
-    platform: 'PS5, Xbox Series X|S',
-    genre: 'Action-Adventure',
-    blurb: 'Rockstar returns to Vice City with two protagonists, Jason and Lucia.'
-  },
-  {
-    id: 'silent-hill-townfall',
-    name: 'Silent Hill: Townfall',
-    date: null,
-    dateLabel: 'Fall 2026 (date TBA)',
-    platform: 'PS5, PC',
-    genre: 'Horror',
-    blurb: 'A first-person descent into a fog-choked Scottish island town.'
-  },
-  {
-    id: 'marvels-wolverine',
-    name: "Marvel's Wolverine",
-    date: null,
-    dateLabel: 'Late 2026 (date TBA)',
-    platform: 'PS5',
-    genre: 'Action-Adventure',
-    blurb: "Insomniac's follow-up to their Spider-Man games, with a darker, more brutal edge."
-  },
-  {
-    id: 'blood-of-dawnwalker',
-    name: 'The Blood of Dawnwalker',
-    date: null,
-    dateLabel: '2026 (date TBA)',
-    platform: 'PC, PS5, Xbox Series X',
-    genre: 'RPG',
-    blurb: 'A dark-fantasy RPG from former Witcher developers, set in the Carpathian kingdom of Vale Sangora.'
+const RAWG_API_KEY = 'f4bfeed7268348f98a468a67b5f48923';
+const RAWG_LOOKAHEAD_DAYS = 180; // how far out to pull upcoming releases
+
+async function fetchGamesFromRAWG() {
+  const today = new Date();
+  const end = new Date(today.getTime() + RAWG_LOOKAHEAD_DAYS * 86400000);
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  const url = `https://api.rawg.io/api/games?key=${RAWG_API_KEY}&dates=${fmt(today)},${fmt(end)}&ordering=released&page_size=40&exclude_additions=true`;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`RAWG responded with ${res.status}`);
+  const data = await res.json();
+
+  return (data.results || [])
+    .filter((g) => g.released) // RAWG can return games with no confirmed date even inside a date-range query
+    .map((g) => ({
+      id: String(g.id), // RAWG's numeric id, shared as-is with the reminder script — no manual syncing needed
+      name: g.name,
+      date: g.released, // 'YYYY-MM-DD'
+      platform: (g.platforms || []).slice(0, 3).map((p) => p.platform.name).join(', ') || 'Platform TBA',
+      genre: (g.genres && g.genres[0] && g.genres[0].name) || 'Other',
+      image: g.background_image || null
+    }));
+}
+
+// Genres come from whatever RAWG returns, so colors are assigned on
+// the fly as new genres show up, rather than a fixed list.
+const GENRE_PALETTE = ['#f5a623', '#4fbdba', '#8e7cc3', '#e5533d', '#6fa8db', '#f27db0', '#7bc86c', '#c9a227'];
+const genreColorMap = new Map();
+function colorForGenre(genre) {
+  if (!genreColorMap.has(genre)) {
+    genreColorMap.set(genre, GENRE_PALETTE[genreColorMap.size % GENRE_PALETTE.length]);
   }
-];
+  return genreColorMap.get(genre);
+}
 
-const GENRE_COLORS = {
-  'Action-Adventure': '#f5a623',
-  'RPG': '#4fbdba',
-  'Strategy': '#8e7cc3',
-  'Horror': '#e5533d',
-  'Shooter': '#6fa8db'
-};
-
-const GENRES = ['All', ...Array.from(new Set(GAMES.map(g => g.genre)))];
+let GAMES = [];
+let GENRES = ['All'];
 
 let activeGenre = 'All';
 let currentUser = null;         // Firebase Auth User object, or null
 let userProfile = null;         // { reminderDays } from Firestore, once signed in
 let bookmarkIds = [];
 let authMode = 'login';         // 'login' | 'register', controls the modal
+let openDateGames = null;       // games currently shown in the date popup, if open
 
 // ---------------------------------------------------------------
 // Firestore helpers
@@ -713,7 +818,6 @@ function daysUntil(dateStr) {
 }
 
 function formatCardDate(game) {
-  if (!game.date) return game.dateLabel;
   const d = new Date(game.date + 'T00:00:00');
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -725,7 +829,6 @@ function initialsFor(name) {
 }
 
 function statusFor(game) {
-  if (!game.date) return { text: game.dateLabel, cls: 'tba' };
   const n = daysUntil(game.date);
   if (n < 0) return { text: 'Released', cls: 'normal' };
   if (n === 0) return { text: 'Out today', cls: 'soon' };
@@ -782,7 +885,7 @@ function renderTabs() {
     if (genre !== 'All') {
       const dot = document.createElement('span');
       dot.className = 'dot';
-      dot.style.background = GENRE_COLORS[genre];
+      dot.style.background = colorForGenre(genre);
       tab.appendChild(dot);
     }
     tab.appendChild(document.createTextNode(genre));
@@ -803,6 +906,7 @@ async function toggleBookmark(id) {
   bookmarkIds = wasBookmarked ? bookmarkIds.filter(g => g !== id) : [...bookmarkIds, id];
   renderReminders();
   renderBoard();
+  if (openDateGames) renderDateModalList(openDateGames);
 
   try {
     const ref = doc(db, 'bookmarks', bookmarkDocId(currentUser.uid, id));
@@ -821,50 +925,119 @@ async function toggleBookmark(id) {
     bookmarkIds = wasBookmarked ? [...bookmarkIds, id] : bookmarkIds.filter(g => g !== id);
     renderReminders();
     renderBoard();
+    if (openDateGames) renderDateModalList(openDateGames);
   }
 }
 
 const CARD_STEP = 184; // card width (168) + gap (16)
+
+// Groups games by exact release date, sorted chronologically.
+function groupGamesByDate(games) {
+  const map = new Map();
+  games.forEach((g) => {
+    if (!map.has(g.date)) map.set(g.date, []);
+    map.get(g.date).push(g);
+  });
+  return Array.from(map.entries())
+    .sort((a, b) => new Date(a[0]) - new Date(b[0]))
+    .map(([date, dateGames]) => ({ date, games: dateGames }));
+}
+
+function buildSingleGameCard(game) {
+  const status = statusFor(game);
+  const c1 = colorForGenre(game.genre);
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.tabIndex = 0;
+
+  const artInner = game.image
+    ? `<img class="cover" src="${game.image}" alt="" loading="lazy">`
+    : `<span class="initials">${initialsFor(game.name)}</span>`;
+
+  card.innerHTML = `
+    <div class="card-art" style="background:${c1}">
+      ${artInner}
+      <span class="status-pill ${status.cls === 'soon' ? 'soon' : ''}">${status.text}</span>
+    </div>
+    <div class="card-title">${game.name}</div>
+    <div class="card-date mono">${formatCardDate(game)}</div>
+  `;
+
+  const bookmarkBtn = document.createElement('button');
+  bookmarkBtn.className = 'bookmark-btn' + (isBookmarked(game.id) ? ' active' : '');
+  bookmarkBtn.title = isBookmarked(game.id) ? 'Remove bookmark' : 'Bookmark this game';
+  bookmarkBtn.textContent = isBookmarked(game.id) ? '★' : '☆';
+  bookmarkBtn.onclick = (e) => { e.stopPropagation(); toggleBookmark(game.id); };
+  card.querySelector('.card-art').appendChild(bookmarkBtn);
+
+  return card;
+}
+
+function buildMultiGameCard(dateGroup) {
+  const { date, games } = dateGroup;
+  const shown = games.slice(0, 3);
+  const remaining = games.length - shown.length;
+
+  const card = document.createElement('div');
+  card.className = 'card-multi';
+  card.tabIndex = 0;
+
+  const header = document.createElement('div');
+  header.className = 'multi-date-header mono';
+  header.textContent = formatCardDate({ date });
+  card.appendChild(header);
+
+  const rows = document.createElement('div');
+  rows.className = 'multi-rows';
+
+  shown.forEach((game) => {
+    const row = document.createElement('div');
+    row.className = 'multi-row';
+    row.innerHTML = game.image
+      ? `<img class="multi-thumb" src="${game.image}" alt="" loading="lazy">`
+      : `<span class="multi-thumb" style="background:${colorForGenre(game.genre)}"></span>`;
+    const title = document.createElement('span');
+    title.className = 'multi-title';
+    title.textContent = game.name;
+    row.appendChild(title);
+    rows.appendChild(row);
+  });
+
+  if (remaining > 0) {
+    const more = document.createElement('div');
+    more.className = 'multi-row more-row';
+    more.textContent = `+${remaining} more`;
+    rows.appendChild(more);
+  }
+
+  card.appendChild(rows);
+  card.onclick = () => openDateModal(dateGroup);
+  return card;
+}
 
 function renderBoard() {
   renderTabs();
   const board = document.getElementById('board');
   board.innerHTML = '';
 
-  const games = GAMES
-    .filter(g => activeGenre === 'All' || g.genre === activeGenre)
-    .sort((a, b) => {
-      if (a.date && b.date) return new Date(a.date) - new Date(b.date);
-      if (a.date) return -1;
-      if (b.date) return 1;
-      return 0;
-    });
+  const filtered = GAMES.filter(g => activeGenre === 'All' || g.genre === activeGenre);
+  const groups = groupGamesByDate(filtered);
 
-  games.forEach((game, i) => {
-    const status = statusFor(game);
-    const c1 = GENRE_COLORS[game.genre];
+  if (groups.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-note';
+    empty.textContent = GAMES.length === 0
+      ? "Couldn't load upcoming games — check that RAWG_API_KEY is set correctly."
+      : 'No upcoming games in this genre right now.';
+    board.appendChild(empty);
+    return;
+  }
 
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.tabIndex = 0;
-    card.dataset.index = i;
-
-    card.innerHTML = `
-      <div class="card-art" style="background:${c1}">
-        <span class="initials">${initialsFor(game.name)}</span>
-        <span class="status-pill ${status.cls === 'soon' ? 'soon' : ''}">${status.text}</span>
-      </div>
-      <div class="card-title">${game.name}</div>
-      <div class="card-date mono">${formatCardDate(game)}</div>
-    `;
-
-    const bookmarkBtn = document.createElement('button');
-    bookmarkBtn.className = 'bookmark-btn' + (isBookmarked(game.id) ? ' active' : '');
-    bookmarkBtn.title = isBookmarked(game.id) ? 'Remove bookmark' : 'Bookmark this game';
-    bookmarkBtn.textContent = isBookmarked(game.id) ? '★' : '☆';
-    bookmarkBtn.onclick = (e) => { e.stopPropagation(); toggleBookmark(game.id); };
-    card.querySelector('.card-art').appendChild(bookmarkBtn);
-
+  groups.forEach((group) => {
+    const card = group.games.length === 1
+      ? buildSingleGameCard(group.games[0])
+      : buildMultiGameCard(group);
     board.appendChild(card);
   });
 }
@@ -873,6 +1046,57 @@ function scrollBoard(direction) {
   const board = document.getElementById('board');
   board.scrollBy({ left: direction * CARD_STEP * 2, behavior: 'smooth' });
 }
+
+// ---------------------------------------------------------------
+// Date popup (shown when a shared-date card is clicked — lists up to
+// 10 games for that date, each with its own bookmark toggle)
+// ---------------------------------------------------------------
+function renderDateModalList(games) {
+  const list = document.getElementById('dateModalList');
+  list.innerHTML = '';
+  games.slice(0, 10).forEach((game) => {
+    const row = document.createElement('div');
+    row.className = 'date-modal-row';
+
+    const thumbHtml = game.image
+      ? `<img class="date-modal-thumb" src="${game.image}" alt="" loading="lazy">`
+      : `<span class="date-modal-thumb" style="display:inline-block;background:${colorForGenre(game.genre)}"></span>`;
+
+    row.innerHTML = `
+      ${thumbHtml}
+      <div class="date-modal-info">
+        <div class="name">${game.name}</div>
+        <div class="platform mono">${game.platform}</div>
+      </div>
+    `;
+
+    const bookmarkBtn = document.createElement('button');
+    bookmarkBtn.className = 'bookmark-btn' + (isBookmarked(game.id) ? ' active' : '');
+    bookmarkBtn.title = isBookmarked(game.id) ? 'Remove bookmark' : 'Bookmark this game';
+    bookmarkBtn.textContent = isBookmarked(game.id) ? '★' : '☆';
+    bookmarkBtn.onclick = () => toggleBookmark(game.id);
+    row.appendChild(bookmarkBtn);
+
+    list.appendChild(row);
+  });
+}
+
+function openDateModal(dateGroup) {
+  openDateGames = dateGroup.games;
+  document.getElementById('dateModalTitle').textContent = `Releasing ${formatCardDate({ date: dateGroup.date })}`;
+  renderDateModalList(openDateGames);
+  document.getElementById('dateModalBackdrop').classList.add('open');
+}
+
+function closeDateModal() {
+  openDateGames = null;
+  document.getElementById('dateModalBackdrop').classList.remove('open');
+}
+
+document.getElementById('dateModalClose').onclick = closeDateModal;
+document.getElementById('dateModalBackdrop').onclick = (e) => {
+  if (e.target.id === 'dateModalBackdrop') closeDateModal();
+};
 
 function renderReminders() {
   const desc = document.getElementById('remindersDesc');
@@ -1026,12 +1250,24 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---------------------------------------------------------------
-// Init — Firebase Auth persists sessions itself (no manual "restore
-// session" step needed); onAuthStateChanged fires once on load with
-// whoever was already signed in, then again on every sign-in/out.
+// Init — load the live game catalog first, then set up auth. Firebase
+// Auth persists sessions itself (no manual "restore session" step
+// needed); onAuthStateChanged fires once on load with whoever was
+// already signed in, then again on every sign-in/out.
 // ---------------------------------------------------------------
-renderAll();
+renderAll(); // draw the shell immediately (empty board) while RAWG loads
 setInterval(renderClock, 1000);
+
+fetchGamesFromRAWG()
+  .then((games) => {
+    GAMES = games;
+    GENRES = ['All', ...Array.from(new Set(GAMES.map((g) => g.genre)))];
+  })
+  .catch((e) => {
+    console.warn('Could not load games from RAWG:', e.message);
+    GAMES = [];
+  })
+  .finally(() => renderAll());
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {

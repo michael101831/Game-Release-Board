@@ -1,29 +1,42 @@
 // Runs on a GitHub Actions schedule (see ../.github/workflows/reminders.yml).
 // Reads Firestore directly with a service account — this is a plain Node
 // script running on GitHub's runners, not a Firebase Cloud Function, so
-// none of this requires the Blaze plan. It plays the same role the
-// Cloud Function's scheduled job played in the earlier version.
+// none of this requires the Blaze plan.
+//
+// Game data comes live from RAWG (same source as the frontend), keyed by
+// RAWG's own numeric id — so there's no hand-maintained list to keep in
+// sync between the site and this script anymore.
 
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 
-// ---------------------------------------------------------------
-// Game catalog — keep this in sync with the copy in public/index.html.
-// ---------------------------------------------------------------
-const GAMES = [
-  { id: 'fire-emblem-fortunes-weave', name: "Fire Emblem: Fortune's Weave", date: '2026-09-17', platform: 'Switch 2' },
-  { id: 'control-resonant', name: 'Control Resonant', date: '2026-09-24', platform: 'PC, PS5, Xbox Series X' },
-  { id: 'witcher-3-remastered', name: 'The Witcher 3: Wild Hunt — Remastered', date: '2026-09-29', platform: 'PC, PS5, Xbox Series X' },
-  { id: 'modern-warfare-new', name: 'Call of Duty: Modern Warfare (2026)', date: null, platform: 'PC, PS5, Xbox Series X' },
-  { id: 'gears-new', name: 'Gears (new entry)', date: null, platform: 'Xbox Series X, PC' },
-  { id: 'gta-vi', name: 'Grand Theft Auto VI', date: '2026-11-19', platform: 'PS5, Xbox Series X|S' },
-  { id: 'silent-hill-townfall', name: 'Silent Hill: Townfall', date: null, platform: 'PS5, PC' },
-  { id: 'marvels-wolverine', name: "Marvel's Wolverine", date: null, platform: 'PS5' },
-  { id: 'blood-of-dawnwalker', name: 'The Blood of Dawnwalker', date: null, platform: 'PC, PS5, Xbox Series X' }
-];
+const RAWG_LOOKAHEAD_DAYS = 180;
 
-function findGame(id) {
-  return GAMES.find((g) => g.id === id);
+async function fetchGamesFromRAWG() {
+  const apiKey = process.env.RAWG_API_KEY;
+  if (!apiKey) throw new Error('RAWG_API_KEY is not set.');
+
+  const today = new Date();
+  const end = new Date(today.getTime() + RAWG_LOOKAHEAD_DAYS * 86400000);
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  const url = `https://api.rawg.io/api/games?key=${apiKey}&dates=${fmt(today)},${fmt(end)}&ordering=released&page_size=40&exclude_additions=true`;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`RAWG responded with ${res.status}`);
+  const data = await res.json();
+
+  const games = new Map();
+  (data.results || [])
+    .filter((g) => g.released)
+    .forEach((g) => {
+      games.set(String(g.id), {
+        id: String(g.id),
+        name: g.name,
+        date: g.released,
+        platform: (g.platforms || []).slice(0, 3).map((p) => p.platform.name).join(', ') || 'Platform TBA'
+      });
+    });
+  return games;
 }
 
 function daysUntil(dateStr) {
@@ -34,10 +47,6 @@ function daysUntil(dateStr) {
   return Math.round((target - today) / 86400000);
 }
 
-// ---------------------------------------------------------------
-// Firebase Admin init — GOOGLE_APPLICATION_CREDENTIALS_JSON is the
-// full service account key JSON, passed in as a GitHub Actions secret.
-// ---------------------------------------------------------------
 function initFirebase() {
   const raw = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
   if (!raw) {
@@ -75,6 +84,10 @@ async function main() {
   const auth = admin.auth();
   const transporter = buildTransporter();
 
+  console.log('Fetching current game catalog from RAWG...');
+  const games = await fetchGamesFromRAWG();
+  console.log(`Loaded ${games.size} upcoming game(s) from RAWG.`);
+
   const snap = await db.collection('bookmarks').where('notified', '==', false).get();
   console.log(`Found ${snap.size} unnotified bookmark(s) to check.`);
 
@@ -82,8 +95,10 @@ async function main() {
 
   for (const docSnap of snap.docs) {
     const bookmark = docSnap.data();
-    const game = findGame(bookmark.gameId);
-    if (!game || !game.date) continue; // no confirmed date yet — nothing to check
+    const game = games.get(bookmark.gameId);
+    // A game a user bookmarked may have since dropped out of RAWG's
+    // lookahead window (e.g. it already released) — nothing to check then.
+    if (!game || !game.date) continue;
 
     const left = daysUntil(game.date);
     if (left === null || left < 0) continue;
