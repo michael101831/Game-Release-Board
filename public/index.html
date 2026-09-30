@@ -303,6 +303,7 @@
 
   /* ---------- multi-game date card (shared release date) ---------- */
   .card-multi {
+    flex: 0 0 168px;
     width: 168px;
     height: 168px;
     border-radius: 8px;
@@ -310,12 +311,8 @@
     border: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    cursor: pointer;
     overflow: hidden;
-  }
-  .card-multi:hover, .card-multi:focus-visible {
-    border-color: var(--amber);
-    outline: none;
+    scroll-snap-align: start;
   }
 
   .multi-date-header {
@@ -324,6 +321,11 @@
     padding: 8px 10px 6px;
     border-bottom: 1px solid var(--border);
     flex: 0 0 auto;
+    cursor: pointer;
+  }
+  .multi-date-header:hover, .multi-date-header:focus-visible {
+    background: var(--panel);
+    outline: none;
   }
 
   .multi-rows {
@@ -678,7 +680,6 @@ const firebaseConfig = {
   measurementId: "G-HLDXQC5TB0"
 };
 
-
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
@@ -981,11 +982,17 @@ function buildMultiGameCard(dateGroup) {
 
   const card = document.createElement('div');
   card.className = 'card-multi';
-  card.tabIndex = 0;
 
   const header = document.createElement('div');
   header.className = 'multi-date-header mono';
   header.textContent = formatCardDate({ date });
+  header.title = 'See all games releasing this day';
+  header.tabIndex = 0;
+  header.setAttribute('role', 'button');
+  header.onclick = () => openDateModal(dateGroup);
+  header.onkeydown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDateModal(dateGroup); }
+  };
   card.appendChild(header);
 
   const rows = document.createElement('div');
@@ -1012,7 +1019,6 @@ function buildMultiGameCard(dateGroup) {
   }
 
   card.appendChild(rows);
-  card.onclick = () => openDateModal(dateGroup);
   return card;
 }
 
