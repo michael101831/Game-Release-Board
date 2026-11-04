@@ -8,6 +8,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Latest upcoming-game list, written by the reminder job. The site
+    // reads it when RAWG is unreachable. Clients cannot write it.
+    match /catalog/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // One doc per user, holding just their reminder lead time.
     // A user can read/create/update only their own doc, keyed by uid.
     match /users/{uid} {

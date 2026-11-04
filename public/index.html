@@ -605,7 +605,7 @@
 
 <footer>
   Reminder emails are sent by the Release Board backend once a bookmarked game's release date falls inside your chosen lead time.
-  <div class="rawg-attribution">Game data and cover art provided by <a href="https://rawg.io" target="_blank" rel="noopener">RAWG.io</a>.</div>
+  <div class="rawg-attribution">Game data and cover art provided by <a href="https://rawg.io" target="_blank" rel="noopener">RAWG.io</a>. When RAWG is unavailable, the board uses <a href="https://store.steampowered.com" target="_blank" rel="noopener">Steam</a>.</div>
 </footer>
 
 <div class="modal-backdrop" id="modalBackdrop">
@@ -685,18 +685,24 @@ const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
 // ---------------------------------------------------------------
-// Game catalog — fetched live from RAWG (rawg.io), a public game
-// database, instead of a hand-maintained list. Sign up for a free key
-// at https://rawg.io/apidocs and paste it below. This key is visible
-// in the page's source once deployed — that's expected for RAWG's
-// free-tier keys (rate-limited per key, not a sensitive credential),
-// not a mistake.
+// Game catalog. RAWG is preferred because bookmark ids are RAWG's own
+// ids. RAWG's origin often times out behind Cloudflare (HTTP 522), so
+// the page first paints catalog.json — and a newer Firestore copy,
+// when the reminder job has published one — then replaces that list if
+// a live RAWG request succeeds.
 //
-// Attribution note: RAWG's terms require crediting them wherever
-// their data/images are shown — see the footer.
+// The key below is visible in the page source. That's expected for
+// RAWG's free-tier keys (rate-limited per key, not a secret).
+// Attribution: see the footer.
 // ---------------------------------------------------------------
 const RAWG_API_KEY = 'f4bfeed7268348f98a468a67b5f48923';
 const RAWG_LOOKAHEAD_DAYS = 180; // how far out to pull upcoming releases
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
 
 async function fetchGamesFromRAWG() {
   const today = new Date();
@@ -704,20 +710,58 @@ async function fetchGamesFromRAWG() {
   const fmt = (d) => d.toISOString().slice(0, 10);
   const url = `https://api.rawg.io/api/games?key=${RAWG_API_KEY}&dates=${fmt(today)},${fmt(end)}&ordering=released&page_size=40&exclude_additions=true`;
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`RAWG responded with ${res.status}`);
-  const data = await res.json();
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+      if (!res.ok) throw new Error(`RAWG responded with ${res.status}`);
+      const data = await res.json();
+      return (data.results || [])
+        .filter((g) => g.released) // RAWG can return games with no confirmed date even inside a date-range query
+        .map((g) => ({
+          id: String(g.id), // RAWG's numeric id, shared as-is with the reminder script — no manual syncing needed
+          name: g.name,
+          date: g.released, // 'YYYY-MM-DD'
+          platform: (g.platforms || []).slice(0, 3).map((p) => p.platform.name).join(', ') || 'Platform TBA',
+          genre: (g.genres && g.genres[0] && g.genres[0].name) || 'Other',
+          image: g.background_image || null
+        }));
+    } catch (err) {
+      lastError = err;
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+  throw lastError;
+}
 
-  return (data.results || [])
-    .filter((g) => g.released) // RAWG can return games with no confirmed date even inside a date-range query
-    .map((g) => ({
-      id: String(g.id), // RAWG's numeric id, shared as-is with the reminder script — no manual syncing needed
-      name: g.name,
-      date: g.released, // 'YYYY-MM-DD'
-      platform: (g.platforms || []).slice(0, 3).map((p) => p.platform.name).join(', ') || 'Platform TBA',
-      genre: (g.genres && g.genres[0] && g.genres[0].name) || 'Other',
-      image: g.background_image || null
-    }));
+async function loadCatalogDocument(url) {
+  const res = await fetch(url, { cache: 'no-cache' });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data && Array.isArray(data.games) && data.games.length ? data : null;
+}
+
+async function loadFirestoreCatalog() {
+  try {
+    const snap = await getDoc(doc(db, 'catalog', 'upcoming'));
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    return data && Array.isArray(data.games) && data.games.length ? data : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function newerCatalog(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return String(a.fetchedAt || '') >= String(b.fetchedAt || '') ? a : b;
+}
+
+function applyGames(games) {
+  GAMES = games;
+  GENRES = ['All', ...Array.from(new Set(GAMES.map((g) => g.genre || 'Other')))];
+  renderAll();
 }
 
 // Genres come from whatever RAWG returns, so colors are assigned on
@@ -914,9 +958,13 @@ async function toggleBookmark(id) {
     if (wasBookmarked) {
       await deleteDoc(ref);
     } else {
+      const game = GAMES.find((g) => g.id === id);
       await setDoc(ref, {
         uid: currentUser.uid,
         gameId: id,
+        name: game ? game.name : null,
+        date: game ? game.date : null,
+        platform: game ? game.platform : null,
         notified: false,
         createdAt: new Date().toISOString()
       });
@@ -953,15 +1001,15 @@ function buildSingleGameCard(game) {
   card.tabIndex = 0;
 
   const artInner = game.image
-    ? `<img class="cover" src="${game.image}" alt="" loading="lazy">`
-    : `<span class="initials">${initialsFor(game.name)}</span>`;
+    ? `<img class="cover" src="${escapeHtml(game.image)}" alt="" loading="lazy">`
+    : `<span class="initials">${escapeHtml(initialsFor(game.name))}</span>`;
 
   card.innerHTML = `
     <div class="card-art" style="background:${c1}">
       ${artInner}
-      <span class="status-pill ${status.cls === 'soon' ? 'soon' : ''}">${status.text}</span>
+      <span class="status-pill ${status.cls === 'soon' ? 'soon' : ''}">${escapeHtml(status.text)}</span>
     </div>
-    <div class="card-title">${game.name}</div>
+    <div class="card-title">${escapeHtml(game.name)}</div>
     <div class="card-date mono">${formatCardDate(game)}</div>
   `;
 
@@ -1002,7 +1050,7 @@ function buildMultiGameCard(dateGroup) {
     const row = document.createElement('div');
     row.className = 'multi-row';
     row.innerHTML = game.image
-      ? `<img class="multi-thumb" src="${game.image}" alt="" loading="lazy">`
+      ? `<img class="multi-thumb" src="${escapeHtml(game.image)}" alt="" loading="lazy">`
       : `<span class="multi-thumb" style="background:${colorForGenre(game.genre)}"></span>`;
     const title = document.createElement('span');
     title.className = 'multi-title';
@@ -1034,7 +1082,7 @@ function renderBoard() {
     const empty = document.createElement('div');
     empty.className = 'empty-note';
     empty.textContent = GAMES.length === 0
-      ? "Couldn't load upcoming games — check that RAWG_API_KEY is set correctly."
+      ? "Couldn't load upcoming games right now. Try refreshing in a few minutes."
       : 'No upcoming games in this genre right now.';
     board.appendChild(empty);
     return;
@@ -1065,14 +1113,14 @@ function renderDateModalList(games) {
     row.className = 'date-modal-row';
 
     const thumbHtml = game.image
-      ? `<img class="date-modal-thumb" src="${game.image}" alt="" loading="lazy">`
+      ? `<img class="date-modal-thumb" src="${escapeHtml(game.image)}" alt="" loading="lazy">`
       : `<span class="date-modal-thumb" style="display:inline-block;background:${colorForGenre(game.genre)}"></span>`;
 
     row.innerHTML = `
       ${thumbHtml}
       <div class="date-modal-info">
-        <div class="name">${game.name}</div>
-        <div class="platform mono">${game.platform}</div>
+        <div class="name">${escapeHtml(game.name)}</div>
+        <div class="platform mono">${escapeHtml(game.platform)}</div>
       </div>
     `;
 
@@ -1163,7 +1211,7 @@ function renderReminders() {
     .forEach(g => {
       const li = document.createElement('li');
       const status = statusFor(g);
-      li.innerHTML = `<span>${g.name}</span><span class="countdown mono">${status.text}</span>`;
+      li.innerHTML = `<span>${escapeHtml(g.name)}</span><span class="countdown mono">${escapeHtml(status.text)}</span>`;
       list.appendChild(li);
     });
   body.appendChild(list);
@@ -1261,19 +1309,25 @@ document.addEventListener('keydown', (e) => {
 // needed); onAuthStateChanged fires once on load with whoever was
 // already signed in, then again on every sign-in/out.
 // ---------------------------------------------------------------
-renderAll(); // draw the shell immediately (empty board) while RAWG loads
+renderAll(); // draw the shell immediately while the catalog loads
 setInterval(renderClock, 1000);
 
-fetchGamesFromRAWG()
-  .then((games) => {
-    GAMES = games;
-    GENRES = ['All', ...Array.from(new Set(GAMES.map((g) => g.genre)))];
-  })
-  .catch((e) => {
+(async () => {
+  const [bundled, remote] = await Promise.all([
+    loadCatalogDocument('catalog.json').catch(() => null),
+    loadFirestoreCatalog()
+  ]);
+  const snapshot = newerCatalog(bundled, remote);
+  if (snapshot) applyGames(snapshot.games);
+
+  try {
+    const live = await fetchGamesFromRAWG();
+    if (live.length) applyGames(live);
+  } catch (e) {
     console.warn('Could not load games from RAWG:', e.message);
-    GAMES = [];
-  })
-  .finally(() => renderAll());
+    if (!GAMES.length) renderAll();
+  }
+})();
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
