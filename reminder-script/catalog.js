@@ -7,6 +7,21 @@
 const LOOKAHEAD_DAYS = 180;
 const CATALOG_LIMIT = 40;
 
+// Steam content descriptors: 1 some nudity or sexual content,
+// 3 adult-only sexual content, 4 frequent nudity or sexual content.
+// Violence (2) and general mature themes (5) stay on the board.
+const SEXUAL_CONTENT_DESCRIPTORS = new Set([1, 3, 4]);
+const NSFW_STEAM_TAGS = new Set([
+  6650, // Nudity
+  9130, // Hentai
+  12095 // Sexual Content
+]);
+const NSFW_NAME = /\b(hentai|porn(?:o|ography)?|nsfw|erotic(?:a)?|nude|nudity|naked|lewd|ecchi|futanari|brothel|succub(?:us|i)|xxx)\b/i;
+const NSFW_RAWG_TAGS = new Set([
+  'nudity', 'sexual-content', 'sexual content', 'nsfw', 'hentai',
+  'erotic', 'erotica', 'porn', 'pornography', 'lewd'
+]);
+
 const MONTHS = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
   jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
@@ -63,6 +78,27 @@ async function fetchOk(url, { attempts = 2, timeout = 15000, headers = {} } = {}
   throw lastError || new Error('request failed');
 }
 
+function isNsfwName(name) {
+  return NSFW_NAME.test(name || '');
+}
+
+function hasSexualDescriptors(ids) {
+  return (ids || []).some((id) => SEXUAL_CONTENT_DESCRIPTORS.has(Number(id)));
+}
+
+function isNsfwRawg(game) {
+  if (isNsfwName(game.name)) return true;
+  const rating = game.esrb_rating && (game.esrb_rating.slug || game.esrb_rating.name || '');
+  if (String(rating).toLowerCase().replace(/\s+/g, '-') === 'adults-only') return true;
+  return (game.tags || []).some((tag) => NSFW_RAWG_TAGS.has(String(tag.slug || tag.name || '').toLowerCase()));
+}
+
+function isNsfwSteamListing(game) {
+  return isNsfwName(game.name)
+    || hasSexualDescriptors(game.descriptorIds)
+    || (game.tagIds || []).some((id) => NSFW_STEAM_TAGS.has(Number(id)));
+}
+
 function mapRawgGame(game) {
   return {
     id: String(game.id),
@@ -79,45 +115,64 @@ async function fetchRawgGames(apiKey) {
 
   const today = new Date();
   const end = addDays(today, LOOKAHEAD_DAYS);
-  const url = `https://api.rawg.io/api/games?key=${apiKey}&dates=${isoDate(today)},${isoDate(end)}&ordering=released&page_size=${CATALOG_LIMIT}&exclude_additions=true`;
-
-  let res;
-  try {
-    res = await fetchOk(url, { attempts: 2, timeout: 12000 });
-  } catch (err) {
-    const status = err && err.status;
-    throw new Error(status ? `RAWG responded with ${status}` : `RAWG request failed: ${err.message}`);
-  }
-
-  const data = await res.json();
   const start = isoDate(today);
   const finish = isoDate(end);
-  return (data.results || [])
-    .filter((game) => game.released && game.released >= start && game.released <= finish)
-    .map(mapRawgGame)
-    .slice(0, CATALOG_LIMIT);
+  const games = [];
+
+  for (let page = 1; page <= 4 && games.length < CATALOG_LIMIT; page++) {
+    const url = `https://api.rawg.io/api/games?key=${apiKey}&dates=${start},${finish}&ordering=released&page_size=${CATALOG_LIMIT}&page=${page}&exclude_additions=true`;
+    let res;
+    try {
+      res = await fetchOk(url, { attempts: page === 1 ? 2 : 1, timeout: 12000 });
+    } catch (err) {
+      if (page === 1) {
+        const status = err && err.status;
+        throw new Error(status ? `RAWG responded with ${status}` : `RAWG request failed: ${err.message}`);
+      }
+      break;
+    }
+
+    const data = await res.json();
+    (data.results || [])
+      .filter((game) => game.released && game.released >= start && game.released <= finish && !isNsfwRawg(game))
+      .map(mapRawgGame)
+      .forEach((game) => {
+        if (games.length < CATALOG_LIMIT) games.push(game);
+      });
+    if (!data.next) break;
+  }
+
+  return games;
+}
+
+function parseIdList(value) {
+  if (!value) return [];
+  return value.split(',').map((id) => Number(id.trim())).filter((id) => !Number.isNaN(id));
 }
 
 function parseSteamHtml(html) {
-  const pattern = /data-ds-appid="(\d+)"[\s\S]*?<img src="([^"]+)"[\s\S]*?<span class="title">([^<]*)<\/span>[\s\S]*?search_platforms">([\s\S]*?)<\/div>[\s\S]*?search_released[^>]*>\s*([^<]*?)\s*<\/div>/g;
+  const pattern = /data-ds-appid="(\d+)"(?:(?!data-ds-appid)[\s\S])*?data-ds-tagids="\[([^\]]*)\]"(?:(?!data-ds-appid)[\s\S])*?(?:data-ds-descids="\[([^\]]*)\]")?(?:(?!data-ds-appid)[\s\S])*?<img src="([^"]+)"[\s\S]*?<span class="title">([^<]*)<\/span>[\s\S]*?search_platforms">([\s\S]*?)<\/div>[\s\S]*?search_released[^>]*>\s*([^<]*?)\s*<\/div>/g;
   const games = [];
   let match;
   while ((match = pattern.exec(html))) {
-    const date = parseSteamDate(match[5]);
+    const date = parseSteamDate(match[7]);
     if (!date) continue;
-    const platformHtml = match[4];
+    const platformHtml = match[6];
     const platforms = [];
     if (platformHtml.includes('win')) platforms.push('Windows');
     if (platformHtml.includes('mac')) platforms.push('Mac');
     if (platformHtml.includes('linux')) platforms.push('Linux');
-    games.push({
+    const game = {
       id: `steam-${match[1]}`,
-      name: decodeEntities(match[3].trim()),
+      name: decodeEntities(match[5].trim()),
       date,
       platform: platforms.join(', ') || 'PC',
       genre: 'Other',
-      image: decodeEntities(match[2])
-    });
+      image: decodeEntities(match[4]),
+      tagIds: parseIdList(match[2]),
+      descriptorIds: parseIdList(match[3])
+    };
+    if (!isNsfwSteamListing(game)) games.push(game);
   }
   return games;
 }
@@ -138,8 +193,16 @@ async function attachSteamGenres(games) {
           }
         );
         const data = await res.json();
-        const genre = data[appId] && data[appId].data && data[appId].data.genres && data[appId].data.genres[0];
-        if (genre && genre.description) game.genre = genre.description;
+        const app = data[appId] && data[appId].data;
+        if (app) {
+          const descriptors = app.content_descriptors && app.content_descriptors.ids;
+          if (hasSexualDescriptors(descriptors) || isNsfwName(app.name)) {
+            game.nsfw = true;
+          } else {
+            const genre = app.genres && app.genres[0];
+            if (genre && genre.description) game.genre = genre.description;
+          }
+        }
       } catch (err) {
         // A missing genre still leaves the game on the board.
       }
@@ -202,7 +265,12 @@ async function fetchSteamGames() {
   }
 
   await attachSteamGenres(games);
-  return games;
+  return games.filter((game) => !game.nsfw).map((game) => {
+    delete game.tagIds;
+    delete game.descriptorIds;
+    delete game.nsfw;
+    return game;
+  });
 }
 
 async function buildCatalog({ apiKey } = {}) {

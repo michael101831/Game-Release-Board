@@ -254,6 +254,7 @@
     display: flex;
     flex-direction: column;
     outline: none;
+    cursor: pointer;
   }
 
   .card:focus-visible .card-art { outline: 2px solid var(--amber); outline-offset: 2px; }
@@ -345,6 +346,8 @@
     overflow: hidden;
   }
   .multi-row:last-child { border-bottom: none; }
+  .multi-row.game-row { cursor: pointer; }
+  .multi-row.game-row:hover, .multi-row.game-row:focus-visible { background: var(--panel); outline: none; }
 
   .multi-thumb {
     width: 24px;
@@ -389,7 +392,9 @@
     padding: 6px;
     border-radius: 6px;
     background: var(--panel-alt);
+    cursor: pointer;
   }
+  .date-modal-row:hover, .date-modal-row:focus-visible { outline: 1px solid var(--border); }
 
   .date-modal-thumb {
     width: 44px;
@@ -524,6 +529,33 @@
     max-width: 340px;
   }
 
+  .modal.image-modal {
+    max-width: min(960px, 100%);
+    padding: 16px;
+  }
+
+  #imageModalBackdrop { z-index: 60; }
+
+  .image-modal img {
+    display: block;
+    width: 100%;
+    max-height: 72vh;
+    object-fit: contain;
+    background: #0c0e13;
+    border-radius: 6px;
+  }
+
+  .image-modal-caption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 14px;
+  }
+
+  .image-modal h3 { margin-bottom: 2px; }
+  .image-modal p { margin: 0; }
+
   .modal h3 {
     margin: 0 0 6px;
     font-family: 'JetBrains Mono', monospace;
@@ -537,6 +569,8 @@
     line-height: 1.5;
     margin: 0 0 14px;
   }
+
+  .modal.image-modal p { margin: 0; }
 
   .modal input {
     width: 100%;
@@ -636,6 +670,19 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="imageModalBackdrop">
+  <div class="modal image-modal" role="dialog" aria-modal="true" aria-labelledby="imageModalTitle">
+    <img id="imageModalImg" alt="">
+    <div class="image-modal-caption">
+      <div>
+        <h3 id="imageModalTitle"></h3>
+        <p id="imageModalMeta" class="mono"></p>
+      </div>
+      <button class="ghost" id="imageModalClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 // ---------------------------------------------------------------
 // Firebase (client SDK, loaded directly from Firebase's CDN — no
@@ -704,34 +751,67 @@ function escapeHtml(value) {
   }[ch]));
 }
 
+// Keep this in step with reminder-script/catalog.js. Adults Only and
+// sexual tags are excluded. Mature ratings that are only violent stay.
+const NSFW_NAME = /\b(hentai|porn(?:o|ography)?|nsfw|erotic(?:a)?|nude|nudity|naked|lewd|ecchi|futanari|brothel|succub(?:us|i)|xxx)\b/i;
+const NSFW_RAWG_TAGS = new Set([
+  'nudity', 'sexual-content', 'sexual content', 'nsfw', 'hentai',
+  'erotic', 'erotica', 'porn', 'pornography', 'lewd'
+]);
+
+function isNsfwRawgGame(game) {
+  if (NSFW_NAME.test(game.name || '')) return true;
+  const rating = game.esrb_rating && (game.esrb_rating.slug || game.esrb_rating.name || '');
+  if (String(rating).toLowerCase().replace(/\s+/g, '-') === 'adults-only') return true;
+  return (game.tags || []).some((tag) => NSFW_RAWG_TAGS.has(String(tag.slug || tag.name || '').toLowerCase()));
+}
+
 async function fetchGamesFromRAWG() {
   const today = new Date();
   const end = new Date(today.getTime() + RAWG_LOOKAHEAD_DAYS * 86400000);
   const fmt = (d) => d.toISOString().slice(0, 10);
-  const url = `https://api.rawg.io/api/games?key=${RAWG_API_KEY}&dates=${fmt(today)},${fmt(end)}&ordering=released&page_size=40&exclude_additions=true`;
+  const start = fmt(today);
+  const finish = fmt(end);
+  const games = [];
 
-  let lastError;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-      if (!res.ok) throw new Error(`RAWG responded with ${res.status}`);
-      const data = await res.json();
-      return (data.results || [])
-        .filter((g) => g.released) // RAWG can return games with no confirmed date even inside a date-range query
-        .map((g) => ({
-          id: String(g.id), // RAWG's numeric id, shared as-is with the reminder script — no manual syncing needed
+  for (let page = 1; page <= 4 && games.length < 40; page++) {
+    const url = `https://api.rawg.io/api/games?key=${RAWG_API_KEY}&dates=${start},${finish}&ordering=released&page_size=40&page=${page}&exclude_additions=true`;
+    let lastError;
+    let data = null;
+    const attempts = page === 1 ? 2 : 1;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+        if (!res.ok) throw new Error(`RAWG responded with ${res.status}`);
+        data = await res.json();
+        break;
+      } catch (err) {
+        lastError = err;
+        if (attempt === 0 && page === 1) await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+    if (!data) {
+      if (page === 1) throw lastError;
+      break;
+    }
+
+    (data.results || [])
+      .filter((g) => g.released && !isNsfwRawgGame(g))
+      .forEach((g) => {
+        if (games.length >= 40) return;
+        games.push({
+          id: String(g.id), // RAWG's numeric id, shared as-is with the reminder script
           name: g.name,
           date: g.released, // 'YYYY-MM-DD'
           platform: (g.platforms || []).slice(0, 3).map((p) => p.platform.name).join(', ') || 'Platform TBA',
           genre: (g.genres && g.genres[0] && g.genres[0].name) || 'Other',
           image: g.background_image || null
-        }));
-    } catch (err) {
-      lastError = err;
-      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
+        });
+      });
+    if (!data.next) break;
   }
-  throw lastError;
+
+  return games;
 }
 
 async function loadCatalogDocument(url) {
@@ -1019,6 +1099,10 @@ function buildSingleGameCard(game) {
   bookmarkBtn.textContent = isBookmarked(game.id) ? '★' : '☆';
   bookmarkBtn.onclick = (e) => { e.stopPropagation(); toggleBookmark(game.id); };
   card.querySelector('.card-art').appendChild(bookmarkBtn);
+  card.onclick = () => openImageModal(game);
+  card.onkeydown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openImageModal(game); }
+  };
 
   return card;
 }
@@ -1048,7 +1132,10 @@ function buildMultiGameCard(dateGroup) {
 
   shown.forEach((game) => {
     const row = document.createElement('div');
-    row.className = 'multi-row';
+    row.className = 'multi-row game-row';
+    row.tabIndex = 0;
+    row.setAttribute('role', 'button');
+    row.title = 'View full image';
     row.innerHTML = game.image
       ? `<img class="multi-thumb" src="${escapeHtml(game.image)}" alt="" loading="lazy">`
       : `<span class="multi-thumb" style="background:${colorForGenre(game.genre)}"></span>`;
@@ -1056,6 +1143,10 @@ function buildMultiGameCard(dateGroup) {
     title.className = 'multi-title';
     title.textContent = game.name;
     row.appendChild(title);
+    row.onclick = () => openImageModal(game);
+    row.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openImageModal(game); }
+    };
     rows.appendChild(row);
   });
 
@@ -1111,6 +1202,8 @@ function renderDateModalList(games) {
   games.slice(0, 10).forEach((game) => {
     const row = document.createElement('div');
     row.className = 'date-modal-row';
+    row.tabIndex = 0;
+    row.title = 'View full image';
 
     const thumbHtml = game.image
       ? `<img class="date-modal-thumb" src="${escapeHtml(game.image)}" alt="" loading="lazy">`
@@ -1128,8 +1221,13 @@ function renderDateModalList(games) {
     bookmarkBtn.className = 'bookmark-btn' + (isBookmarked(game.id) ? ' active' : '');
     bookmarkBtn.title = isBookmarked(game.id) ? 'Remove bookmark' : 'Bookmark this game';
     bookmarkBtn.textContent = isBookmarked(game.id) ? '★' : '☆';
-    bookmarkBtn.onclick = () => toggleBookmark(game.id);
+    bookmarkBtn.onclick = (e) => { e.stopPropagation(); toggleBookmark(game.id); };
     row.appendChild(bookmarkBtn);
+    row.onclick = () => openImageModal(game);
+    row.onkeydown = (e) => {
+      if (e.target === bookmarkBtn) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openImageModal(game); }
+    };
 
     list.appendChild(row);
   });
@@ -1147,9 +1245,42 @@ function closeDateModal() {
   document.getElementById('dateModalBackdrop').classList.remove('open');
 }
 
+function fullImageUrl(url) {
+  if (!url) return null;
+  if (url.includes('capsule_231x87')) return url.replace('capsule_231x87', 'capsule_616x353');
+  return url.replace(/\/media\/resize\/\d+\/-\//, '/media/');
+}
+
+function openImageModal(game) {
+  const img = document.getElementById('imageModalImg');
+  document.getElementById('imageModalTitle').textContent = game.name;
+  document.getElementById('imageModalMeta').textContent = `${formatCardDate(game)} · ${game.platform || 'Platform TBA'}`;
+  const full = fullImageUrl(game.image);
+  img.hidden = !full;
+  if (full) {
+    img.alt = game.name;
+    img.onerror = () => {
+      if (game.image && img.src !== game.image) img.src = game.image;
+    };
+    img.src = full;
+  }
+  document.getElementById('imageModalBackdrop').classList.add('open');
+}
+
+function closeImageModal() {
+  const img = document.getElementById('imageModalImg');
+  img.onerror = null;
+  img.removeAttribute('src');
+  document.getElementById('imageModalBackdrop').classList.remove('open');
+}
+
 document.getElementById('dateModalClose').onclick = closeDateModal;
 document.getElementById('dateModalBackdrop').onclick = (e) => {
   if (e.target.id === 'dateModalBackdrop') closeDateModal();
+};
+document.getElementById('imageModalClose').onclick = closeImageModal;
+document.getElementById('imageModalBackdrop').onclick = (e) => {
+  if (e.target.id === 'imageModalBackdrop') closeImageModal();
 };
 
 function renderReminders() {
@@ -1296,8 +1427,16 @@ document.getElementById('scrollRightBtn').onclick = () => scrollBoard(1);
 
 document.addEventListener('keydown', (e) => {
   const modalOpen = document.getElementById('modalBackdrop').classList.contains('open');
+  const dateOpen = document.getElementById('dateModalBackdrop').classList.contains('open');
+  const imageOpen = document.getElementById('imageModalBackdrop').classList.contains('open');
   const typing = document.activeElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName);
-  if (modalOpen || typing) return;
+
+  if (e.key === 'Escape') {
+    if (imageOpen) { closeImageModal(); return; }
+    if (dateOpen) { closeDateModal(); return; }
+  }
+
+  if (modalOpen || dateOpen || imageOpen || typing) return;
 
   if (e.key === 'ArrowRight') { e.preventDefault(); scrollBoard(1); }
   if (e.key === 'ArrowLeft') { e.preventDefault(); scrollBoard(-1); }
